@@ -35,6 +35,7 @@ import java.nio.channels.FileChannel;
 import java.nio.file.FileSystem;
 import java.nio.file.InvalidPathException;
 import java.nio.file.SecureDirectoryStream;
+import java.nio.file.WatchService;
 import java.nio.file.attribute.BasicFileAttributeView;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -187,6 +188,30 @@ public final class Configuration {
   }
 
   /**
+   * Returns a default configuration appropriate to the current operating system.
+   *
+   * <p>More specifically, if the operating system is Windows, {@link Configuration#windows()} is
+   * returned; if the operating system is Mac OS X, {@link Configuration#osX()} is returned;
+   * otherwise, {@link Configuration#unix()} is returned.
+   *
+   * <p>This is the configuration used by the {@code Jimfs.newFileSystem} methods that do not take
+   * a {@code Configuration} parameter.
+   *
+   * @since 1.1
+   */
+  public static Configuration forCurrentPlatform() {
+    String os = System.getProperty("os.name");
+
+    if (os.contains("Windows")) {
+      return windows();
+    } else if (os.contains("OS X")) {
+      return osX();
+    } else {
+      return unix();
+    }
+  }
+
+  /**
    * Creates a new mutable {@link Configuration} builder using the given path type.
    */
   public static Builder builder(PathType pathType) {
@@ -208,6 +233,9 @@ public final class Configuration {
   final ImmutableSet<String> attributeViews;
   final ImmutableSet<AttributeProvider> attributeProviders;
   final ImmutableMap<String, Object> defaultAttributeValues;
+
+  // Watch service
+  final WatchServiceConfiguration watchServiceConfig;
 
   // Other
   final ImmutableSet<String> roots;
@@ -234,6 +262,7 @@ public final class Configuration {
         builder.defaultAttributeValues == null
             ? ImmutableMap.<String, Object>of()
             : ImmutableMap.copyOf(builder.defaultAttributeValues);
+    this.watchServiceConfig = builder.watchServiceConfig;
     this.roots = builder.roots;
     this.workingDirectory = builder.workingDirectory;
     this.supportedFeatures = builder.supportedFeatures;
@@ -276,6 +305,9 @@ public final class Configuration {
     private Set<AttributeProvider> attributeProviders = null;
     private Map<String, Object> defaultAttributeValues;
 
+    // Watch service
+    private WatchServiceConfiguration watchServiceConfig = WatchServiceConfiguration.DEFAULT;
+
     // Other
     private ImmutableSet<String> roots = ImmutableSet.of();
     private String workingDirectory;
@@ -302,6 +334,7 @@ public final class Configuration {
           configuration.defaultAttributeValues.isEmpty()
               ? null
               : new HashMap<>(configuration.defaultAttributeValues);
+      this.watchServiceConfig = configuration.watchServiceConfig;
       this.roots = configuration.roots;
       this.workingDirectory = configuration.workingDirectory;
       this.supportedFeatures = configuration.supportedFeatures;
@@ -603,6 +636,17 @@ public final class Configuration {
      */
     public Builder setSupportedFeatures(Feature... features) {
       supportedFeatures = Sets.immutableEnumSet(Arrays.asList(features));
+      return this;
+    }
+
+    /**
+     * Sets the configuration that {@link WatchService} instances created by the file system
+     * should use. The default configuration polls watched directories for changes every 5 seconds.
+     *
+     * @since 1.1
+     */
+    public Builder setWatchServiceConfiguration(WatchServiceConfiguration config) {
+      this.watchServiceConfig = checkNotNull(config);
       return this;
     }
 
